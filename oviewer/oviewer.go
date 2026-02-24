@@ -686,7 +686,7 @@ func (root *Root) SetConfig(config Config) {
 	}
 
 	if config.SidebarMode != "" {
-		for s := SidebarModeNone; s < SidebarModeEnd; s++ {
+		for s := SidebarModeHelp; s < SidebarModeEnd; s++ {
 			if strings.EqualFold(config.SidebarMode, s.String()) {
 				root.sidebarMode = s
 				root.sidebarVisible = true
