@@ -21,7 +21,6 @@ func (root *Root) eventLoop(ctx context.Context, quitChan chan<- struct{}) {
 	go root.updateInterval(ctx)
 	defer root.debugNumOfChunk()
 	root.generateSectionList()
-	root.prepareScreen()
 	for {
 		root.everyUpdate(ctx)
 		ev := <-root.Screen.EventQ()
