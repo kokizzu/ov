@@ -13,7 +13,7 @@ import (
 // UpdateInterval is the update interval that calls eventUpdate().
 var UpdateInterval = 50 * time.Millisecond
 
-// eventLoop is manages and executes events in the eventLoop routine.
+// eventLoop manages and executes events in the eventLoop routine.
 func (root *Root) eventLoop(ctx context.Context, quitChan chan<- struct{}) {
 	if root.Doc.WatchMode {
 		atomic.StoreInt32(&root.Doc.watchRestart, 1)
@@ -330,7 +330,7 @@ func (root *Root) sendDocument(docNum int) {
 	root.postEvent(ev)
 }
 
-// eventAddDocument represents a set document event.
+// eventAddDocument represents an add document event.
 type eventAddDocument struct {
 	m *Document
 	tcell.EventTime

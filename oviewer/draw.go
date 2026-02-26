@@ -203,7 +203,7 @@ func (root *Root) drawRuler() {
 	root.Screen.PutStrStyled(startX, 1, onesLine[offset:], style)
 }
 
-// drawWrapLine wraps and draws the contents and returns the next drawing position.
+// drawLine draws the contents (wrapping if needed) and returns the next drawing position.
 func (root *Root) drawLine(y int, lX int, lN int, lineC LineC) (int, int) {
 	if root.Doc.WrapMode {
 		return root.drawWrapLine(y, lX, lN, lineC)
@@ -323,7 +323,7 @@ func (m *Document) widthVerticalHeader(lineC LineC) int {
 	return columns[vhc-1].end + 1
 }
 
-// blankLineNumber should be blank for the line number.
+// blankLineNumber clears the line number display area.
 func (root *Root) blankLineNumber(y int) {
 	if !root.Doc.LineNumMode {
 		return
@@ -388,7 +388,7 @@ func (root *Root) clearEOL(x int, y int, style tcell.Style) {
 	root.Screen.PutStrStyled(x, y, strings.Repeat(" ", root.scr.vWidth-x), style)
 }
 
-// clearY clear the specified line.
+// clearY clears the specified line.
 func (root *Root) clearY(y int) {
 	root.clearEOL(0, y, defaultStyle)
 }

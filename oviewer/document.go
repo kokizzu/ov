@@ -312,7 +312,7 @@ func (m *Document) NewCache() error {
 // - name: a string representing the name of the converter type.
 // Returns:
 // - A Converter interface corresponding to the specified name.
-// converterType returns the Converter type.
+
 func (m *Document) converterType(name string) Converter {
 	switch name {
 	case convRaw:
@@ -495,7 +495,7 @@ func (m *Document) BufStartNum() int {
 	return int(atomic.LoadInt32(&m.store.startNum))
 }
 
-// BufEndNum return last line number.
+// BufEndNum returns the last line number.
 func (m *Document) BufEndNum() int {
 	if atomic.LoadInt32(&m.tmpFollow) == 1 {
 		return int(atomic.LoadInt32(&m.followStore.endNum))
@@ -665,7 +665,7 @@ func (m *Document) setSectionDelimiter(delm string) {
 	m.sectionListDirty = true
 }
 
-// setMultiColorWords set multiple strings to highlight with multiple colors.
+// setMultiColorWords sets multiple strings to highlight with multiple colors.
 func (m *Document) setMultiColorWords(words []string) {
 	m.MultiColorWords = words
 	m.multiColorRegexps = multiRegexpCompile(words)

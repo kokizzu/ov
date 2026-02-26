@@ -263,7 +263,7 @@ type RunTimeSettings struct {
 	ColumnRainbow bool
 	// LineNumMode displays line numbers.
 	LineNumMode bool
-	// Wrap is Wrap mode.
+	// WrapMode is wrap mode.
 	WrapMode bool
 	// FollowMode is the follow mode.
 	FollowMode bool
@@ -279,7 +279,7 @@ type RunTimeSettings struct {
 	SectionHeader bool
 	// HideOtherSection is whether to hide other sections.
 	HideOtherSection bool
-	// StatusLine is whether to hide the status line.
+	// StatusLine is whether to display the status line.
 	StatusLine bool
 
 	// PromptConfig is the prompt configuration.
