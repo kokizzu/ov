@@ -240,6 +240,7 @@ func TestRoot_sidebarItemsForHelp(t *testing.T) {
 		})
 	}
 }
+
 func TestRoot_sidebarItemsForSections(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -263,7 +263,7 @@ type RunTimeSettings struct {
 	ColumnRainbow bool
 	// LineNumMode displays line numbers.
 	LineNumMode bool
-	// Wrap is Wrap mode.
+	// WrapMode is wrap mode.
 	WrapMode bool
 	// FollowMode is the follow mode.
 	FollowMode bool
@@ -279,7 +279,7 @@ type RunTimeSettings struct {
 	SectionHeader bool
 	// HideOtherSection is whether to hide other sections.
 	HideOtherSection bool
-	// StatusLine is whether to hide the status line.
+	// StatusLine is whether to display the status line.
 	StatusLine bool
 
 	// PromptConfig is the prompt configuration.
@@ -481,13 +481,10 @@ func NewOviewer(docs ...*Document) (*Root, error) {
 	}
 	root.DocList = append(root.DocList, docs...)
 	root.Doc = root.DocList[0]
-
-	screen, err := tcellNewScreen()
+	w, h := terminalSize()
+	screen, err := virtualScreen(w, h)
 	if err != nil {
 		return nil, err
-	}
-	if err := screen.Init(); err != nil {
-		return nil, fmt.Errorf("Screen.Init(): %w", err)
 	}
 	root.Screen = screen
 
@@ -815,6 +812,13 @@ func (root *Root) Run() error {
 	if err := root.prepareRun(ctx); err != nil {
 		return err
 	}
+	root.prepareScreen()
+	if root.quitCheck() {
+		return nil
+	}
+	if err := root.switchToRealScreen(); err != nil {
+		return err
+	}
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGINT)
@@ -822,7 +826,6 @@ func (root *Root) Run() error {
 	quitChan := make(chan struct{})
 
 	root.monitorEOF()
-
 	go func() {
 		// Undo screen when goroutine panic.
 		defer func() {
@@ -1265,24 +1268,27 @@ func updateRuntimeStyle(src Style, dst StyleConfig) Style {
 
 // docSmall returns with bool whether the file to display fits on the screen.
 func (root *Root) docSmall() bool {
-	root.prepareScreen()
 	m := root.Doc
 	if !m.BufEOF() {
 		return false
 	}
-	screenHeight := root.scr.vHeight - root.scr.statusLineHeight
-	height := 0
-	for y := range m.BufEndNum() {
-		lc, err := m.contents(y)
-		if err != nil {
-			log.Printf("docSmall %d: %v\n", y, err)
-			continue
-		}
-		height += 1 + (len(lc) / root.scr.vWidth)
-		if height > screenHeight {
-			return false
-		}
+	w, h := root.Screen.Size()
+	bodyHeight := h - root.scr.statusLineHeight
+	if m.BufEndNum() > bodyHeight {
+		return false
 	}
+	start, end, err := root.drawVirtualScreen(w, bodyHeight+1)
+	if err != nil {
+		log.Println(err)
+		return false
+	}
+	if (end - start) >= bodyHeight {
+		return false
+	}
+
+	strs := tcellansi.ScreenContentToStrings(root.Screen, 0, root.Doc.bodyWidth, start, end)
+	strs = tcellansi.TrimRightSpaces(strs)
+	root.OnExit = strs
 	return true
 }
 
@@ -1322,7 +1328,8 @@ func (root *Root) outputOnExit(output io.Writer) {
 func (root *Root) writeCurrentScreen(output io.Writer) {
 	strs := root.OnExit
 	if strs == nil {
-		start, end, err := root.dummyScreen()
+		w, h := root.Screen.Size()
+		start, end, err := root.drawVirtualScreen(w, h)
 		if err != nil {
 			log.Println(err)
 			return
@@ -1338,26 +1345,74 @@ func (root *Root) writeCurrentScreen(output io.Writer) {
 	}
 }
 
-// dummyScreen creates a dummy screen.
-func (root *Root) dummyScreen() (int, int, error) {
-	col := 80
-	row := 25
+// switchToRealScreen switches to the real screen for drawing to the actual terminal.
+func (root *Root) switchToRealScreen() error {
+	virtual := root.Screen
+	real, err := realScreen()
+	if err != nil {
+		return err
+	}
+	root.Screen = real
+
+Loop:
+	for {
+		select {
+		case ev := <-virtual.EventQ():
+			real.EventQ() <- ev
+		default:
+			break Loop
+		}
+	}
+	virtual.Fini()
+	return nil
+}
+
+// realScreen creates a real screen for drawing to the actual terminal.
+func realScreen() (tcell.Screen, error) {
+	screen, err := tcellNewScreen()
+	if err != nil {
+		return nil, err
+	}
+	if err := screen.Init(); err != nil {
+		return nil, err
+	}
+	screen.Sync() // Because the size cannot be obtained unless Sync is performed.
+	w, h := screen.Size()
+	if w <= 0 || h <= 0 {
+		screen.Fini()
+		return nil, ErrNotTerminal
+	}
+	return screen, nil
+}
+
+// terminalSize returns the size of the terminal.
+func terminalSize() (int, int) {
+	width := 80
+	height := 25
 	fd := int(os.Stdout.Fd())
 	w, h, err := term.GetSize(fd)
 	if err == nil && w > 0 && h > 0 {
-		col = w
-		row = h
+		width = w
+		height = h
 	}
-	mt := vt.NewMockTerm(vt.MockOptSize{X: vt.Col(col), Y: vt.Row(row)})
-	scr, err := tcell.NewTerminfoScreenFromTty(mt)
+	return width, height
+}
+
+// virtualScreen creates a virtual screen for drawing without affecting the actual terminal.
+func virtualScreen(width int, height int) (tcell.Screen, error) {
+	mt := vt.NewMockTerm(vt.MockOptSize{X: vt.Col(width), Y: vt.Row(height)})
+	screen, err := tcell.NewTerminfoScreenFromTty(mt)
 	if err != nil {
-		return 0, 0, err
+		return nil, err
 	}
-	root.Screen = scr
-	if err := root.Screen.Init(); err != nil {
-		return 0, 0, err
+	if err := screen.Init(); err != nil {
+		return nil, err
 	}
-	height := root.scr.vHeight
+	return screen, nil
+}
+
+// drawVirtualScreen draws to the virtual screen and returns the valid lines.
+func (root *Root) drawVirtualScreen(width int, height int) (int, int, error) {
 	if root.Config.BeforeWriteOriginal != 0 || root.Config.AfterWriteOriginal != 0 {
 		root.Doc.topLN = max(root.Doc.topLN+root.Doc.firstLine()-root.Config.BeforeWriteOriginal, 0)
 		end := root.Doc.bottomLN
@@ -1366,7 +1421,15 @@ func (root *Root) dummyScreen() (int, int, error) {
 		}
 		height = max(end-root.Doc.topLN, 0)
 	}
-	root.Screen.SetSize(root.scr.vWidth, height)
+	w, h := root.Screen.Size()
+	if width != w || height != h {
+		screen, err := virtualScreen(width, height)
+		if err != nil {
+			return 0, 0, err
+		}
+		root.Screen = screen
+	}
+
 	if root.Pattern != "" {
 		root.setSearcher(root.Pattern, root.Config.CaseSensitive)
 	}

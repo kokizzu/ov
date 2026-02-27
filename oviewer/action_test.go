@@ -2416,6 +2416,7 @@ func TestRoot_toggleSidebarDocList(t *testing.T) {
 		t.Errorf("toggleSidebarDocList() sidebarMode = %v, want %v", root.sidebarMode, SidebarModeNone)
 	}
 }
+
 func TestRoot_toggleSidebarSections(t *testing.T) {
 	root := rootHelper(t)
 	ctx := context.Background()
@@ -2442,4 +2443,3 @@ func TestRoot_toggleSidebarSections(t *testing.T) {
 		t.Errorf("toggleSidebarSections() sidebarMode = %v, want %v", root.sidebarMode, SidebarModeNone)
 	}
 }
-
