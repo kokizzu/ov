@@ -481,8 +481,8 @@ func NewOviewer(docs ...*Document) (*Root, error) {
 	}
 	root.DocList = append(root.DocList, docs...)
 	root.Doc = root.DocList[0]
-
-	screen, err := virtualScreen()
+	w, h := terminalSize()
+	screen, err := virtualScreen(w, h)
 	if err != nil {
 		return nil, err
 	}
@@ -1273,16 +1273,16 @@ func (root *Root) docSmall() bool {
 		return false
 	}
 	w, h := root.Screen.Size()
-	if m.BufEndNum() > h {
+	bodyHeight := h - root.scr.statusLineHeight
+	if m.BufEndNum() > bodyHeight {
 		return false
 	}
-	start, end, err := root.drawVirtualScreen(w, h+1)
+	start, end, err := root.drawVirtualScreen(w, bodyHeight+1)
 	if err != nil {
 		log.Println(err)
 		return false
 	}
-	screenHeight := h - root.scr.statusLineHeight
-	if (end - start) >= screenHeight {
+	if (end - start) >= bodyHeight {
 		return false
 	}
 
@@ -1328,13 +1328,7 @@ func (root *Root) outputOnExit(output io.Writer) {
 func (root *Root) writeCurrentScreen(output io.Writer) {
 	strs := root.OnExit
 	if strs == nil {
-		screen, err := virtualScreen()
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		w, h := screen.Size()
-		root.Screen = screen
+		w, h := root.Screen.Size()
 		start, end, err := root.drawVirtualScreen(w, h)
 		if err != nil {
 			log.Println(err)
@@ -1391,17 +1385,22 @@ func realScreen() (tcell.Screen, error) {
 	return screen, nil
 }
 
-// virtualScreen creates a virtual screen for drawing without affecting the actual terminal.
-func virtualScreen() (tcell.Screen, error) {
-	col := 80
-	row := 25
+// terminalSize returns the size of the terminal.
+func terminalSize() (int, int) {
+	width := 80
+	height := 25
 	fd := int(os.Stdout.Fd())
 	w, h, err := term.GetSize(fd)
 	if err == nil && w > 0 && h > 0 {
-		col = w
-		row = h
+		width = w
+		height = h
 	}
-	mt := vt.NewMockTerm(vt.MockOptSize{X: vt.Col(col), Y: vt.Row(row)})
+	return width, height
+}
+
+// virtualScreen creates a virtual screen for drawing without affecting the actual terminal.
+func virtualScreen(width int, height int) (tcell.Screen, error) {
+	mt := vt.NewMockTerm(vt.MockOptSize{X: vt.Col(width), Y: vt.Row(height)})
 	screen, err := tcell.NewTerminfoScreenFromTty(mt)
 	if err != nil {
 		return nil, err
@@ -1422,7 +1421,15 @@ func (root *Root) drawVirtualScreen(width int, height int) (int, int, error) {
 		}
 		height = max(end-root.Doc.topLN, 0)
 	}
-	root.Screen.SetSize(width, height)
+	w, h := root.Screen.Size()
+	if width != w || height != h {
+		screen, err := virtualScreen(width, height)
+		if err != nil {
+			return 0, 0, err
+		}
+		root.Screen = screen
+	}
+
 	if root.Pattern != "" {
 		root.setSearcher(root.Pattern, root.Config.CaseSensitive)
 	}
